@@ -13,26 +13,34 @@ end box
 
 == PHASE 1 ==
 
-note over Leader
-    Broadcast P1a to all Acceptors.
-    The following activation corresponds
-    to the **"Scouts"**
-end note
+Leader -> Leader : Activate "Scout" stage.
+
+activate Leader
 
 loop until at least half responses no greater than my ballot OR any greater
+    note over Leader
+        Broadcast P1a to all Acceptors.
+
+        This activation corresponds
+        to the **"Scouts"** thread
+        but we are not using a separate
+        thread in this implementation.
+    end note
+
     Leader -> Acceptor : P1a <ballot>
+
+    Acceptor -> Acceptor : Update my_ballot
     note right
         if msg_ballot > my_ballot:
             my_ballot = msg_ballot
     end note
 
-    activate Leader
-
     Acceptor -> Leader : P1b <ballot, accepted[]>
     note right
-        **"Accepted"**, in P1b message is a
-        collection of PValues. This collection
-        is appended to during Phase 2 on P2a.
+        **"accepted"**, is a collection of **PValue**.
+        
+        That collection is appended to during
+        Phase 2 on P2a.
 
         A **PValue** consists of:
         <slot, ballot, req>
@@ -41,7 +49,19 @@ loop until at least half responses no greater than my ballot OR any greater
     deactivate Leader
 end
 
-alt At least half responses no greater than my_ballot?
+alt At least ONE msg received with Ballot greater than my_ballot
+    Leader -> Leader : Preempted <ballot>
+    note over Leader
+        **On PreemptedMessage:**
+
+        if msg.ballot > my_ballot:
+            **my_ballot = msg.ballot + 1**
+            Go back to phase 1
+
+        This Leader no longer Active
+        **BECOME A FOLLOWER**
+    end note
+else At least half responses received with no Ballot greater than my_ballot?
     Leader -> Leader : Adopted <ballot, accepted[]>
     note over Leader
         **On AdoptedMessage:**
@@ -54,18 +74,6 @@ alt At least half responses no greater than my_ballot?
             (Might receive Preempted msg here)
 
         **BECOME THE DISTINGUISHED LEADER**
-    end note
-else At least one msg received with grater ballot than my_ballot
-    Leader -> Leader : Preempted <ballot>
-    note over Leader
-        **On PreemptedMessage:**
-
-        if msg.ballot > my_ballot:
-            **my_ballot = msg.ballot + 1**
-            Go back to phase 1
-
-        This Leader no longer Active
-        **BECOME A FOLLOWER**
     end note
 end
 
@@ -83,14 +91,21 @@ Replica -> Leader : Propose <slot, req>
 
 alt slot NOT in Leader's proposals
     Leader -> Leader : Add (slot -> req) entry to proposals map
-    note over Leader
-        Broadcast P2a to all Acceptors.
-        The following activation corresponds
-        to the **"Commanders"**
-    end note
 
     alt if DISTINGUISHED LEADER
+        Leader -> Leader : Activate "Commander" stage
+        activate Leader
+
         loop until at least half responses no greater than my ballot OR any greater
+            note over Leader
+                Broadcast P2a to all Acceptors.
+
+                This activation corresponds
+                to the **"Commanders"** thread
+                but we are not using a separate
+                thread in this implementation.
+            end note
+
             Leader -> Acceptor : P2a <Pvalue>
             note right
                 A **PValue** consists of
@@ -101,16 +116,13 @@ alt slot NOT in Leader's proposals
                 Acceptor -> Acceptor : Add Pvalue to **"accepted"** set
             end
 
-            activate Leader
 
             Acceptor -> Leader : P2b <ballot, slot>
 
             deactivate Leader
         end
 
-        alt At least half responses no greater than my_ballot?
-            Leader -> Replica : Decision <id, seq, cmd>
-        else At least one msg received with grater ballot than my_ballot
+        alt At least ONE msg received with Ballot greater than my_ballot
             Leader -> Leader : Preempted <ballot>
 
             note over Leader
@@ -123,17 +135,32 @@ alt slot NOT in Leader's proposals
                 This Leader no longer Active
                 **BECOME A FOLLOWER**
             end note
+        else At least half responses received with no Ballot greater than my_ballot?
+            Leader -> Replica : Decision <slot, req>
+
+            Replica -> Replica : Register PaxosDecision
+            note left
+                PaxosDecision consists of:
+                <id, seq, cmd>
+            end note
+
+            Replica -> Replica : Perform command
+            note left
+                Apply state change on
+                the KV store.
+
+                **slot_out += 1**
+            end note
+
+            Replica -> Client : Reply <id, seq, result>
+            note right
+                Finally, reply back to
+                the Client.
+
+                **END**
+            end note
         end
     end
 end
-
-note over Replica
-    Invoke perform()
-        Perform command. Apply state change.
-
-    **slot_out += 1**
-end note
-
-Replica -> Client : Reply <id, seq, result>
 
 @enduml
