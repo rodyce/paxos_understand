@@ -22,9 +22,7 @@ loop until at least half responses no greater than my ballot OR any greater
         Broadcast P1a to all Acceptors.
 
         This activation corresponds
-        to the **"Scouts"** thread
-        but we are not using a separate
-        thread in this implementation.
+        to the **"Scouts"** part.
     end note
 
     Leader -> Acceptor : P1a <ballot>
@@ -38,12 +36,10 @@ loop until at least half responses no greater than my ballot OR any greater
     Acceptor -> Leader : P1b <ballot, accepted[]>
     note right
         **"accepted"**, is a collection of **PValue**.
+        A **PValue** consists of: <slot, ballot, req>
         
         That collection is appended to during
         Phase 2 on P2a.
-
-        A **PValue** consists of:
-        <slot, ballot, req>
     end note
 
     deactivate Leader
@@ -63,7 +59,7 @@ alt At least ONE msg received with Ballot greater than my_ballot
     end note
 else At least half responses received with no Ballot greater than my_ballot?
     Leader -> Leader : Adopted <ballot, accepted[]>
-    note over Leader
+    note right
         **On AdoptedMessage:**
 
         if my_ballot == msg_ballot
@@ -101,9 +97,7 @@ alt slot NOT in Leader's proposals
                 Broadcast P2a to all Acceptors.
 
                 This activation corresponds
-                to the **"Commanders"** thread
-                but we are not using a separate
-                thread in this implementation.
+                to the **"Commanders"** part.
             end note
 
             Leader -> Acceptor : P2a <Pvalue>
