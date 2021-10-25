@@ -93,12 +93,13 @@ alt slot NOT in Leader's proposals
         loop until at least half responses no greater than my ballot OR any greater
             Leader -> Acceptor : P2a <Pvalue>
             note right
-                if msg.ballot == my_ballot:
-                    add msg.Pvalue to **"Accepted"** set
-
                 A **PValue** consists of
                 <slot, ballot, req>
             end note
+
+            alt if msg.ballot == my_ballot
+                Acceptor -> Acceptor : Add Pvalue to **"accepted"** set
+            end
 
             activate Leader
 
