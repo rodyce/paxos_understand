@@ -1,0 +1,138 @@
+@startuml PAXOS
+
+autonumber
+box "PaxosClient" #LightBlue
+    actor Client
+end box
+box "PaxosServer" #LightGreen
+    collections "Replica" as Replica
+    collections "Leader" as Leader
+    collections "Acceptor" as Acceptor
+end box
+
+
+== PHASE 1 ==
+
+note over Leader
+    Broadcast P1a to all Acceptors.
+    The following activation corresponds
+    to the **"Scouts"**
+end note
+
+loop until at least half responses no greater than my ballot OR any greater
+    Leader -> Acceptor : P1a <ballot>
+    note right
+        if msg_ballot > my_ballot:
+            my_ballot = msg_ballot
+    end note
+
+    activate Leader
+
+    Acceptor -> Leader : P1b <ballot, accepted[]>
+    note right
+        **"Accepted"**, in P1b message is a
+        collection of PValues. This collection
+        is appended to during Phase 2 on P2a.
+
+        A **PValue** consists of:
+        <slot, ballot, req>
+    end note
+
+    deactivate Leader
+end
+
+alt At least half responses no greater than my_ballot?
+    Leader -> Leader : Adopted <ballot, accepted[]>
+    note over Leader
+        **On AdoptedMessage:**
+
+        if my_ballot == msg_ballot
+            foreach pvalue in msg.accepted
+                choose command with highest slot number
+                Store it into proposals.
+            Start Phase 2 with all Pvalues.
+            (Might receive Preempted msg here)
+
+        **BECOME THE DISTINGUISHED LEADER**
+    end note
+else At least one msg received with grater ballot than my_ballot
+    Leader -> Leader : Preempted <ballot>
+    note over Leader
+        **On PreemptedMessage:**
+
+        if msg.ballot > my_ballot:
+            **my_ballot = msg.ballot + 1**
+            Go back to phase 1
+
+        This Leader no longer Active
+        **BECOME A FOLLOWER**
+    end note
+end
+
+
+...
+
+== PHASE 2 ==
+
+Client -> Replica : Request <id, seq, cmd>
+note over Replica
+    **slot_in += 1**
+end note
+
+Replica -> Leader : Propose <slot, req>
+
+alt slot NOT in Leader's proposals
+    Leader -> Leader : Add (slot -> req) entry to proposals map
+    note over Leader
+        Broadcast P2a to all Acceptors.
+        The following activation corresponds
+        to the **"Commanders"**
+    end note
+
+    alt if DISTINGUISHED LEADER
+        loop until at least half responses no greater than my ballot OR any greater
+            Leader -> Acceptor : P2a <Pvalue>
+            note right
+                if msg.ballot == my_ballot:
+                    add msg.Pvalue to **"Accepted"** set
+
+                A **PValue** consists of
+                <slot, ballot, req>
+            end note
+
+            activate Leader
+
+            Acceptor -> Leader : P2b <ballot, slot>
+
+            deactivate Leader
+        end
+
+        alt At least half responses no greater than my_ballot?
+            Leader -> Replica : Decision <id, seq, cmd>
+        else At least one msg received with grater ballot than my_ballot
+            Leader -> Leader : Preempted <ballot>
+
+            note over Leader
+                **On PreemptedMessage:**
+
+                if msg.ballot > my_ballot:
+                    **my_ballot = msg.ballot + 1**
+                    Go back to phase 1
+
+                This Leader no longer Active
+                **BECOME A FOLLOWER**
+            end note
+        end
+    end
+end
+
+note over Replica
+    Invoke perform()
+        Perform command. Apply state change.
+
+    **slot_out += 1**
+end note
+
+Replica -> Client : Reply <id, seq, result>
+
+@enduml
