@@ -130,6 +130,9 @@ alt slot NOT in Leader's proposals
                 **BECOME A FOLLOWER**
             end note
         else At least half responses received with no Ballot greater than my_ballot?
+            note over Leader
+                Broadcast **Decision** to **ALL Replicas**
+            end note
             Leader -> Replica : Decision <slot, req>
 
             Replica -> Replica : Register PaxosDecision
